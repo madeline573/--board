@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聚类债券区间回报</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<style>
+:root{ --c-blue: #2563eb; --c-blue-hover: #1d4ed8; --c-bg: #f8fafc; --c-border: #e2e8f0; --c-text: #1e293b; --c-text-light: #64748b; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background:var(--c-bg); color:var(--c-text); padding:24px; min-height:100vh; line-height: 1.5;}
+h1{font-size:22px; font-weight:600; margin-bottom:6px; color:#0f172a; letter-spacing:0.5px}
+.subtitle{font-size:13px; color:var(--c-text-light); margin-bottom:20px}
+/* 紧凑型独立控制台 */
+.ctrl-local{display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:#fff; border-radius:10px; padding:12px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.03); margin-bottom:16px; border: 1px solid var(--c-border);}
+.ctrl-local label{font-size:13px; color:#475569; font-weight:600}
+.ctrl-local input[type=date], select{border:1px solid #cbd5e1; border-radius:6px; padding:6px 12px; font-size:13px; outline:none; transition:all .2s; font-family:inherit; background:#fff;}
+.ctrl-local input[type=date]:focus, select:focus{border-color:var(--c-blue); box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+
+.btn{background:var(--c-blue); color:#fff; border:none; border-radius:6px; padding:6px 18px; font-size:13px; cursor:pointer; transition:all .2s; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:6px;}
+.btn:hover{background:var(--c-blue-hover); transform:translateY(-1px); box-shadow:0 4px 12px rgba(37,99,235,.2)}
+.btn-s{background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;}.btn-s:hover{background:#e2e8f0; color:#0f172a;}
+.tabs{display:flex; gap:0; margin-bottom:20px}
+.tab{padding:10px 24px; font-size:14px; cursor:pointer; border:1px solid var(--c-border); background:#fff; color:var(--c-text-light); transition:all .2s; user-select:none; font-weight:600}
+.tab:first-child{border-radius:8px 0 0 8px}.tab:last-child{border-radius:0 8px 8px 0}
+.tab+.tab{border-left:none}.tab:hover{background:#f1f5f9}
+.tab.active{background:var(--c-blue); color:#fff; border-color:var(--c-blue)}
+.panel{display:none}.panel.show{display:block}
+.tbl-wrap{background:#fff; border-radius:12px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); overflow-x:auto; border: 1px solid var(--c-border);}
+.tbl-title{font-size:15px; font-weight:700; color:#0f172a; margin-bottom:14px; border-left:4px solid var(--c-blue); padding-left:12px}
+table{width:100%; border-collapse:collapse; font-size:13px}
+th{background:#f8fafc; color:#475569; font-weight:600; padding:10px 12px; text-align:center; white-space:nowrap; border-bottom:2px solid #cbd5e1; border-top:1px solid #e2e8f0; position:sticky; top:0; z-index:2;}
+th:first-child{text-align:left; min-width:190px}
+td{padding:8px 12px; text-align:center; border-bottom:1px solid #f1f5f9; white-space:nowrap; color:#334155; transition: background 0.2s;}
+td.num{font-family:"Helvetica Neue", Helvetica, Arial, sans-serif; font-size:13.5px}
+td:first-child{text-align:left; color:#1e293b; font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px;}
+tr{transition: opacity 0.2s; cursor: grab;} tr:active{cursor: grabbing;} tr:hover td{filter: brightness(0.96);}
+tr.disabled td{color: #cbd5e1 !important; background: #f8fafc !important;} 
+tr.disabled td span{color: #cbd5e1 !important;} 
+.sep td{border:none; height:8px; background:transparent}
+.na{color:#94a3b8; font-size:12px}
+.chart-section{background:#fff; border-radius:12px; padding:16px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--c-border);}
+.chart-ctrl{display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed #e2e8f0}
+.sel-group{display:flex; flex-direction:column; gap:6px}
+.sel-group label{font-size:12px; color:var(--c-text-light); font-weight:600}
+.sel-group select{min-width:180px; font-size:12px;}
+
+/* 紧凑型展示框 */
+.master-controls{background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin-bottom:16px;}
+.mc-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.mc-title{font-size:13px; font-weight:700; color:#1e293b;}
+.mc-actions button{background:none; border:1px solid #cbd5e1; border-radius:4px; padding:2px 8px; font-size:11px; cursor:pointer; margin-left:6px; color:#475569; font-weight:600;}
+.mc-actions button:hover{background:#e2e8f0; color:#0f172a;}
+/* 核心修改点：限制高度加滚动，防止刷屏 */
+.active-tags{display:flex; flex-wrap:wrap; gap:6px; max-height:100px; overflow-y:auto; padding-right:4px;}
+.active-tags::-webkit-scrollbar { width: 6px; }
+.active-tags::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.active-tag{background:#fff; border:1px solid #cbd5e1; border-radius:4px; padding:2px 6px; font-size:11.5px; font-weight:600; display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none;}
+.active-tag input[type="checkbox"]{cursor:pointer; margin:0;}
+.active-tag:hover{border-color:#94a3b8;}
+.active-tag.disabled{opacity:0.5; background:#f1f5f9;}
+.active-tag .rm{color:#94a3b8; font-size:14px; margin-left:2px;}
+.active-tag .rm:hover{color:#ef4444;}
+
+#chartWrap{position:relative; height:420px; width:100%; margin-bottom:4px;}
+.chart-info{font-size:12px; color:#64748b; margin-bottom:8px; text-align:right;}
+
+/* 框选结果高度限制 */
+#rangeInfo{max-height:120px; overflow-y:auto; background:#f8fafc; padding:10px 14px; border-radius:8px; border:1px dashed #cbd5e1; display:none; margin-bottom:16px;}
+#rangeInfo::-webkit-scrollbar { width: 6px; }
+#rangeInfo::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.ret-box{display:inline-block; background:#fff; border:1px solid #e2e8f0; border-radius:4px; padding:4px 8px; margin:2px 6px 2px 0; font-size:12px; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,0.02);}
+.ret-title{font-size:12px; color:#1e293b; font-weight:700; margin-bottom:6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;}
+.ret-pos{color:#ef4444;} .ret-neg{color:#10b981;} .ret-zero{color:#64748b;}
+.drag-hint{font-size:11px; color:#94a3b8; font-weight:normal; margin-left:8px;}
+</style>
+</head>
+<body>
+<h1>📊 聚类债券区间回报分析系统</h1>
+<div class="subtitle" id="upd">⏳ 正在从云端拉取最新数据，请稍候...</div>
+
+<div class="tabs" id="tabBar"></div>
+<div id="panels"></div>
+
+<script>
+let G = null;
+let ds = [];
+let treeData = {};
+let activeCurves = [];
+let myChart = null;
+let latestDate = '';
+
+const COLORS=['#2563eb','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#14b8a6','#f43f5e','#d946ef','#6366f1','#059669','#ea580c','#4f46e5'];
+
+const TABLES=[
+{ id:'t0',tab:'常规聚类',title:'常规聚类持有期回报',cols:['0-1Y','1-2Y','2-3Y','3-5Y','5-7Y','7-10Y'], rows:[ ['铁道债','常规普通债聚类名单','铁道债'],['隐含AAA(城投)','常规普通债聚类名单','隐含AAA(城投)'],['隐含AAA(产业)','常规普通债聚类名单','隐含AAA(产业)'],['隐含AAA（城投永续）','产业永续债聚类名单','隐含AAA（城投永续）'],['隐含AAA（产业永续）','产业永续债聚类名单','隐含AAA（产业永续）'],['债项隐含AAA(银行商金)','银行商金名单','债项隐含AAA(银行商金)'],'sep',['隐含AAA-(产业)','常规普通债聚类名单','隐含AAA-(产业)'],['隐含AAA-(金租)','常规普通债聚类名单','隐含AAA-(金租)'],['隐含AAA-（产业永续）','产业永续债聚类名单','隐含AAA-（产业永续）'],['债项隐含AAA-(银行商金)','银行商金名单','债项隐含AAA-(银行商金)'],['债项隐含AAA-(银行二级)','银行二级名单','债项隐含AAA-(银行二级)'],['债项隐含AAA-(银行永续)','银行永续名单','债项隐含AAA-(银行永续)'],['债项隐含AAA-(券商次级)','券商次级债聚类名单','债项隐含AAA-(券商次级)'],['债项隐含AAA-(券商永续)','券商永续债聚类名单','债项隐含AAA-(券商永续)'],'sep',['隐含AA+(城投)','常规普通债聚类名单','隐含AA+(城投)'],['隐含AA+(产业)','常规普通债聚类名单','隐含AA+(产业)'],['隐含AA+(商租)','常规普通债聚类名单','隐含AA+(商租)'],['隐含AA+（城投永续）','产业永续债聚类名单','隐含AA+（城投永续）'],['隐含AA+（产业永续）','产业永续债聚类名单','隐含AA+（产业永续）'],['债项隐含AA+(银行二级)','银行二级名单','债项隐含AA+(银行二级)'],['债项隐含AA+(银行永续)','银行永续名单','债项隐含AA+(银行永续)'],'sep',['隐含AA(城投)','常规普通债聚类名单','隐含AA(城投)'],['隐含AA(产业)','常规普通债聚类名单','隐含AA(产业)'],['隐含AA（城投永续）','产业永续债聚类名单','隐含AA（城投永续）'],['隐含AA（产业永续）','产业永续债聚类名单','隐含AA（产业永续）'],'sep',['隐含AA(2)(城投)','常规普通债聚类名单','隐含AA(2)(城投)'],['常规聚类平均','常规普通债聚类名单','常规聚类平均'] ] },
+{ id:'t1',tab:'主题聚类',title:'主题聚类持有期回报',cols:['0-1Y','1-2Y','2-3Y','3-5Y','5-7Y','7-10Y'], rows:[ ['普通城农商行永续','银行永续名单','普通城农商行永续'],['普通城农商行二级','银行二级名单','普通城农商行二级'],['优质城农商行永续','银行永续名单','优质城农商行永续'],['优质城农商行二级','银行二级名单','优质城农商行二级'],'sep',['京沪城投','主题普通债聚类名单','京沪城投'],['川渝城投','主题普通债聚类名单','川渝城投'],['湘赣鄂城投','主题普通债聚类名单','湘赣鄂城投'],['江浙低评级','主题普通债聚类名单','江浙低评级'],['安徽城投','主题普通债聚类名单','安徽城投'],['天津城投','主题普通债聚类名单','天津城投'],'sep',['京沪弱国企','主题普通债聚类名单','京沪弱国企'],['过剩行业伪AAA国企','主题普通债聚类名单','过剩行业伪AAA国企'],['边缘国企','主题普通债聚类名单','边缘国企'],['巴三投资级主体','主题普通债聚类名单','巴三投资级主体'],['高息资产','主题普通债聚类名单','高息资产'],'sep',['次级永续','产业永续次级债聚类名单','次级永续'],['AAA-次级永续','产业永续次级债聚类名单','AAA-次级永续'],['AA+次级永续','产业永续次级债聚类名单','AA+次级永续'],['AA次级永续','产业永续次级债聚类名单','AA次级永续'],'sep',['高等级产业永续','产业永续债聚类名单','高等级产业永续'],['弱产业央企永续','产业永续债聚类名单','弱产业央企永续'],['过剩行业伪AAA永续','产业永续债聚类名单','过剩行业伪AAA永续'],['边缘永续','产业永续债聚类名单','边缘永续'],'sep',['地产_央企地产','地产债聚类名单','地产_央企地产'],['地产_地方国企','地产债聚类名单','地产_地方国企'],['地产_弱资质央企','地产债聚类名单','地产_弱资质央企'],['地产_弱资质地方国企','地产债聚类名单','地产_弱资质地方国企'],['涉地产城投B','地产债聚类名单','涉地产城投B'],['涉地产城投B_弱资质','地产债聚类名单','涉地产城投B_弱资质'],['主题聚类平均','主题普通债聚类名单','主题聚类平均'] ] },
+{ id:'t2',tab:'长期信用债',title:'长期信用债',cols:['10Y','15Y','20Y','30Y'], rows:[ ['诚通','长期信用债聚类名单','诚通'],['三峡','长期信用债聚类名单','三峡'],['中信','长期信用债聚类名单','中信'],['其他隐含AAA族','长期信用债聚类名单','其他隐含AAA族'],['其他隐含AA+族','长期信用债聚类名单','其他隐含AA+族'],['隐含AA','长期信用债聚类名单','隐含AA'],['隐含AA+城投','长期信用债聚类名单','隐含AA+城投'],'sep',['债项隐含AAA-(银行二级)','银行二级名单','债项隐含AAA-(银行二级)'],['债项隐含AA+(银行二级)','银行二级名单','债项隐含AA+(银行二级)'],['债项隐含AAA-(券商公司债)','券商次级债聚类名单','债项隐含AAA-(券商公司债)'] ] }
+];
+
+fetch('./data.json?t=' + new Date().getTime())
+  .then(res => res.json())
+  .then(data => { G = data; initPage(); })
+  .catch(err => { document.getElementById('upd').innerHTML = '<span style="color:red;font-weight:bold">⚠️ 数据加载失败。请确保是在线环境。</span>'; });
+
+function initPage() {
+    const dateSet = new Set();
+    for(const t of Object.values(G.data)) for(const v of Object.values(t)) v.dates.forEach(d=>dateSet.add(d));
+    ds = [...dateSet].sort();
+    
+    document.getElementById('upd').textContent='数据截至最新交易日：'+(G._meta.last_date||'');
+    latestDate = ds.length ? ds[ds.length-1] : '';
+
+    const tabBar=document.getElementById('tabBar'), panels=document.getElementById('panels');
+    
+    // 生成固定表格（独立日期控制）
+    TABLES.forEach((t,i)=>{
+      const tb=document.createElement('div');
+      tb.className='tab'+(i===0?' active':'');tb.textContent=t.tab;
+      tb.onclick=()=>switchTab(i);tabBar.appendChild(tb);
+      
+      const div=document.createElement('div');
+      div.className='panel'+(i===0?' show':'');div.id='p'+i;
+      div.innerHTML=`
+        <div class="ctrl-local">
+          <label>起始日期</label><input type="date" id="sd_${i}" value="2026-01-01" onchange="calcTable(${i})">
+          <label>截止日期</label><input type="date" id="ed_${i}" value="${latestDate}" onchange="calcTable(${i})">
+        </div>
+        <div class="tbl-wrap"><div class="tbl-title">${t.title}</div><table id="tbl${i}"></table></div>
+      `;
+      panels.appendChild(div);
+    });
+    
+    // 生成自定义分析界面 (独立日期控制 + 上下排布)
+    const ctab=document.createElement('div');ctab.className='tab';ctab.textContent='\u{1F527} 进阶功能 (组合图表 & 周期回报)';
+    ctab.onclick=()=>switchTab(TABLES.length);tabBar.appendChild(ctab);
+
+    for(const[tn,td] of Object.entries(G.data)){
+      const short=tn.replace('聚类名单','').replace('名单','');
+      if(!treeData[short])treeData[short]={_task:tn, mats:new Set(), map:{}};
+      for(const s of Object.values(td)){
+        if(s.label.startsWith('_'))continue;
+        treeData[short].mats.add(s.mat);
+        if(!treeData[short].map[s.mat]) treeData[short].map[s.mat] = new Set();
+        treeData[short].map[s.mat].add(s.label);
+      }
+    }
+
+    const cp=document.createElement('div');cp.className='panel';cp.id='p'+TABLES.length;
+    cp.innerHTML=`
+    <div class="ctrl-local">
+      <label>分析起始日期</label><input type="date" id="sd_adv" value="2026-01-01" onchange="calcAdvanced()">
+      <label>分析截止日期</label><input type="date" id="ed_adv" value="${latestDate}" onchange="calcAdvanced()">
+    </div>
+    <div class="chart-section">
+      <div class="chart-ctrl">
+        <div class="sel-group"><label>1. 任务类型 (单选)</label>
+          <select id="selTask" onchange="onTaskChange()"><option value="">请选择</option></select></div>
+        <div class="sel-group"><label>2. 期限 (按住Ctrl多选)</label>
+          <select id="selMat" multiple size="3" style="height:70px" onchange="onMatChange()"><option value="">先选任务</option></select></div>
+        <div class="sel-group"><label>3. 标签 (不选默认添加全部)</label>
+          <select id="selLabel" multiple size="3" style="height:70px"><option value="">先选期限</option></select></div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:16px">
+          <button class="btn" onclick="addCurve()">➕ 添加到对比</button>
+        </div>
+      </div>
+      <div class="master-controls">
+         <div class="mc-header">
+            <div class="mc-title">📍 全局已选曲线 <span style="font-weight:normal;color:#64748b;font-size:11px">（勾选控制图表/表格展示状态）</span></div>
+            <div class="mc-actions">
+               <button onclick="toggleAllCards(true)">全选</button><button onclick="toggleAllCards(false)">反选</button><button onclick="clearCurves()" style="color:#ef4444;border-color:#fca5a5">清空</button>
+            </div>
+         </div>
+         <div id="activeTags" class="active-tags"></div>
+      </div>
+      
+      <div class="chart-info">💡 <b>图表缩放与计算：</b> 底部进度条可缩放全局；右上角【横向框选】工具可在图中拖拽计算特定区间；【还原】清除。</div>
+      <div id="chartWrap"></div>
+      <div id="rangeInfo"></div>
+
+      <div style="margin-top:20px; display:flex; gap:16px; align-items:center; background:#f8fafc; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:12px;">
+         <label style="font-weight:600;font-size:13px;color:#1e293b">📅 周期回报切分频率：</label>
+         <select id="periodFreq" onchange="calcPeriodic()">
+            <option value="W">周度 (Weekly)</option>
+            <option value="M">月度 (Monthly)</option>
+         </select>
+         <span style="font-size:11px;color:#64748b;margin-left:10px">🖱️ 支持鼠标按住行<b>上下拖拽排序</b>；点击某行可<b>置灰忽略</b>。</span>
+      </div>
+      <div class="tbl-wrap" style="box-shadow:none; border:1px solid #e2e8f0; margin-bottom:0">
+         <div id="periodicTableBox">请添加曲线并选择参数</div>
+      </div>
+    </div>`;
+    panels.appendChild(cp);
+
+    const selTask=document.getElementById('selTask');
+    for(const k of Object.keys(treeData)){
+      const o=document.createElement('option');o.value=k;o.textContent=k;selTask.appendChild(o);
+    }
+    
+    // 初始化独立计算
+    TABLES.forEach((t, i) => calcTable(i));
+    renderActiveTags();
+}
+
+function lookup(tn,lb,mt){const td=G.data[tn];return td?td[lb+'__'+mt]||null:null;}
+function calcRet(s,sd,ed){
+  if(!s)return null;
+  const{dates,full}=s;let i0=-1,i1=-1;
+  for(let i=0;i<dates.length;i++)if(dates[i]>=sd){i0=i;break;}
+  for(let i=dates.length-1;i>=0;i--)if(dates[i]<=ed){i1=i;break;}
+  if(i0<0||i1<0||i1<=i0)return null;
+  const a=full[i0],b=full[i1];
+  if(!a||b===undefined)return null;
+  return Math.round((b/a-1)*1e6)/100;
+}
+
+function colorScale(vals){
+  const arr=vals.filter(x=>x!==null).sort((a,b)=>a-b);
+  if(arr.length<2)return()=>'';
+  const mn=arr[0],mx=arr[arr.length-1]; if(mn===mx)return()=>'';
+  const mid=(mn+mx)/2;
+  return function(v){
+    if(v===null)return'';
+    let t;
+    if(v>=mid){
+      t=mx===mid?0:(v-mid)/(mx-mid); t=Math.max(0,Math.min(1,t));
+      const r=255,g=Math.round(255-t*115),b=Math.round(255-t*125);
+      return'background:rgba('+r+','+g+','+b+', 0.65)';
+    }else{
+      t=mid===mn?0:(mid-v)/(mid-mn); t=Math.max(0,Math.min(1,t));
+      const r=Math.round(255-t*105),g=255,b=Math.round(255-t*90);
+      return'background:rgba('+r+','+g+','+b+', 0.55)';
+    }
+  };
+}
+function fmtCell(v,cfn){
+  if(v===null)return'<td class="num"><span class="na">—</span></td>';
+  return'<td class="num" style="'+cfn(v)+'">'+(v>0?'+':'')+v.toFixed(1)+'</td>';
+}
+
+function onTaskChange(){
+  const selMat=document.getElementById('selMat'), selLabel=document.getElementById('selLabel');
+  selMat.innerHTML=''; selLabel.innerHTML='<option value="">先选期限</option>';
+  const t=treeData[document.getElementById('selTask').value]; 
+  if(!t) {selMat.innerHTML='<option value="">先选任务</option>'; return;}
+  Array.from(t.mats).sort().forEach(m=>{ const o=document.createElement('option');o.value=m;o.textContent=m;selMat.appendChild(o); });
+}
+
+function onMatChange(){
+  const selMat=document.getElementById('selMat'), selLabel=document.getElementById('selLabel');
+  selLabel.innerHTML='';
+  const t=treeData[document.getElementById('selTask').value]; if(!t) return;
+  const mats = Array.from(selMat.selectedOptions).map(o=>o.value);
+  if(!mats.length){ selLabel.innerHTML='<option value="">先选期限</option>'; return; }
+  
+  let validLabels = new Set();
+  mats.forEach(m => { if(t.map[m]) t.map[m].forEach(lb => validLabels.add(lb)); });
+  Array.from(validLabels).sort().forEach(lb=>{ const o=document.createElement('option');o.value=lb;o.textContent=lb;selLabel.appendChild(o); });
+}
+
+function switchTab(i){
+  document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('active',j===i));
+  document.querySelectorAll('.panel').forEach((p,j)=>p.classList.toggle('show',j===i));
+  if(i===TABLES.length && myChart) myChart.resize();
+}
+
+function renderActiveTags(){
+  const box = document.getElementById('activeTags'); box.innerHTML = '';
+  if(activeCurves.length===0){ box.innerHTML='<div style="font-size:12px;color:#94a3b8">暂无曲线</div>'; return; }
+  activeCurves.forEach((c,i)=>{
+     const d = document.createElement('div'); d.className = 'active-tag' + (c.visible ? '' : ' disabled');
+     const cb = document.createElement('input'); cb.type='checkbox'; cb.checked=c.visible;
+     cb.onchange = (e) => { c.visible = e.target.checked; renderActiveTags(); calcAdvanced(); };
+     const txt = document.createElement('span'); txt.innerHTML = `<b style="color:${c.visible ? c.color : '#94a3b8'}">■</b> ${c.name}`;
+     txt.onclick = () => cb.click();
+     const rm = document.createElement('span'); rm.className = 'rm'; rm.textContent = '×';
+     rm.onclick = () => removeCurve(c.name);
+     d.appendChild(cb); d.appendChild(txt); d.appendChild(rm); box.appendChild(d);
+  });
+}
+
+function addCurve(){
+  const selTask=document.getElementById('selTask'), selMat=document.getElementById('selMat'), selLabel=document.getElementById('selLabel');
+  const taskShort=selTask.value; const t=treeData[taskShort]; if(!t)return alert('请选择任务');
+  const mats = Array.from(selMat.selectedOptions).map(o=>o.value); if(!mats.length)return alert('请选择期限');
+  let lbs = Array.from(selLabel.selectedOptions).map(o=>o.value);
+  if(!lbs.length) lbs = Array.from(selLabel.options).map(o=>o.value);
+  const td=G.data[t._task]; if(!td)return;
+  
+  let added = 0;
+  mats.forEach(m=>{
+      lbs.forEach(lb=>{
+          const key=lb+'__'+m; const s=td[key]; if(!s) return;
+          const name=taskShort+' / '+lb+' / '+m;
+          if(activeCurves.find(c=>c.name===name)) return;
+          activeCurves.push({ name: name, series: s, visible: true, color: COLORS[activeCurves.length % COLORS.length] });
+          added++;
+      });
+  });
+  if(added > 0){ renderActiveTags(); calcAdvanced(); }
+}
+
+function removeCurve(name){
+  const i = activeCurves.findIndex(c=>c.name===name);
+  if(i>-1) activeCurves.splice(i,1);
+  activeCurves.forEach((c,idx)=> c.color = COLORS[idx%COLORS.length]);
+  renderActiveTags(); calcAdvanced();
+}
+
+function clearCurves(){ activeCurves.length=0; renderActiveTags(); if(myChart){myChart.dispose();myChart=null;} document.getElementById('rangeInfo').style.display='none'; calcAdvanced(); }
+function toggleAllCards(state){ activeCurves.forEach(c => c.visible = state); renderActiveTags(); calcAdvanced(); }
+
+/* 进阶区域统一计算 (图+表) */
+function calcAdvanced() {
+    renderChart();
+    calcPeriodic();
+}
+
+function renderChart(){
+  const sd=document.getElementById('sd_adv').value, ed=document.getElementById('ed_adv').value;
+  const visibleCurves = activeCurves.filter(c => c.visible);
+  const dateSet=new Set();
+  visibleCurves.forEach(c=>{c.series.dates.forEach(d=>{ if((!sd||d>=sd)&&(!ed||d<=ed)) dateSet.add(d); });});
+  const dates=[...dateSet].sort();
+  
+  if(!dates.length || !visibleCurves.length){ if(myChart){myChart.dispose();myChart=null;} return; }
+  
+  const datasets = visibleCurves.map(c=>{
+    const idx={}; c.series.dates.forEach((d,j)=>{idx[d]=j;}); let base=null;
+    const data=dates.map(d=>{
+      const j=idx[d]; if(j===undefined) return null;
+      if(base===null) base=c.series.full[j];
+      return base ? Math.round(c.series.full[j]/base*1e6)/1e6 : null;
+    });
+    return { name: c.name, type: 'line', data: data, showSymbol: false, lineStyle: {width: 2}, itemStyle: {color: c.color} };
+  });
+
+  if(!myChart) myChart = echarts.init(document.getElementById('chartWrap'));
+  const option = {
+      tooltip: { trigger: 'axis', valueFormatter: (value) => value ? value.toFixed(4) : '-' },
+      grid: { left: '2%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+      toolbox: {
+          feature: { brush: { type: ['lineX', 'clear'], title: { lineX: '横向框选', clear: '清除' } }, dataZoom: { yAxisIndex: 'none', title: { zoom: '区域缩放', back: '还原' } } }, right: '2%'
+      },
+      brush: { toolbox: ['lineX', 'clear'], xAxisIndex: 'all', brushLink: 'all', outOfBrush: { colorAlpha: 0.2 } },
+      dataZoom: [ { type: 'slider', bottom: 0, height: 20, borderColor: '#e2e8f0' }, { type: 'inside' } ],
+      xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: '#cbd5e1' } }, splitLine: { show: true, lineStyle: { color: '#f1f5f9' } } },
+      yAxis: { type: 'value', scale: true, axisLine: { show: false }, splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed' } } },
+      series: datasets
+  };
+  myChart.setOption(option, true);
+  myChart.off('brushEnd'); // 清除旧监听
+  myChart.on('brushEnd', function (params) {
+      if(!params.areas.length){ document.getElementById('rangeInfo').style.display='none'; return; }
+      let range = params.areas[0].coordRange, dsd = dates[range[0]], ded = dates[range[1]];
+      showBrushReturn(dsd, ded, visibleCurves);
+  });
+}
+
+function showBrushReturn(sd, ed, curves){
+  const el = document.getElementById('rangeInfo');
+  let h = `<div class="ret-title">⏱️ 框选计算区间：${sd} ➔ ${ed}</div>`;
+  curves.forEach(c=>{
+    const v = calcRet(c.series, sd, ed);
+    const vCls = v===null ? 'ret-zero' : (v>0 ? 'ret-pos' : (v<0 ? 'ret-neg' : 'ret-zero'));
+    const vs = v!==null ? ((v>0?'+':'')+v.toFixed(2)+' bp') : '—';
+    h += `<div class="ret-box"><span style="color:${c.color}">■</span> ${c.name}：<span class="${vCls}">${vs}</span></div>`;
+  });
+  el.innerHTML = h; el.style.display = 'block';
+}
+
+function calcPeriodic(){
+    const box = document.getElementById('periodicTableBox');
+    if(!activeCurves.length){ box.innerHTML='<div style="color:#64748b; font-size:13px; text-align:center; padding:20px;">请在上方添加曲线以显示周期回报矩阵。</div>'; return;}
+    const freq = document.getElementById('periodFreq').value, sd = document.getElementById('sd_adv').value, ed = document.getElementById('ed_adv').value;
+    const datesInRange = ds.filter(d => d>=sd && d<=ed);
+    if(!datesInRange.length){ box.innerHTML='此区间内无数据。'; return;}
+    
+    const groups = {};
+    datesInRange.forEach(d => {
+        let k;
+        if(freq === 'M') k = d.substring(0,7);
+        else {
+            let dt = new Date(d); dt.setUTCDate(dt.getUTCDate() + 4 - (dt.getUTCDay()||7));
+            let y = dt.getUTCFullYear(), w = Math.ceil((((dt - new Date(Date.UTC(y,0,1))) / 86400000) + 1)/7);
+            k = y + '-W' + String(w).padStart(2,'0');
+        }
+        if(!groups[k]) groups[k] = [];
+        groups[k].push(d);
+    });
+    const periods = Object.keys(groups).sort();
+    let allVals = [];
+    activeCurves.forEach(c => {
+        if(!c.visible) return;
+        periods.forEach(p => {
+            let arr = groups[p];
+            if(arr[0] !== arr[arr.length-1]){
+                let ret = calcRet(c.series, arr[0], arr[arr.length-1]);
+                if(ret !== null) allVals.push(ret);
+            }
+        });
+    });
+    let cfn = colorScale(allVals);
+    
+    let html = '<table id="periodicTbl"><thead><tr><th>对比序列名称</th>';
+    periods.forEach(p => { let arr = groups[p]; html += `<th style="font-size:12px">${arr[0].slice(5)} ~<br>${arr[arr.length-1].slice(5)}</th>`; });
+    html += '</tr></thead><tbody id="periodicTbody">';
+    activeCurves.forEach((c) => {
+        html += `<tr draggable="true" data-name="${c.name}" class="${c.visible ? '' : 'disabled'}">`;
+        html += `<td><span style="color:${c.color}">■</span> ${c.name}</td>`;
+        periods.forEach(p => {
+            let arr = groups[p], d0 = arr[0], d1 = arr[arr.length-1];
+            if(d0 === d1) html += '<td class="num"><span class="na">—</span></td>';
+            else {
+                let ret = calcRet(c.series, d0, d1);
+                if(ret === null) html += '<td class="num"><span class="na">—</span></td>';
+                else {
+                    let s = c.visible ? cfn(ret) : '';
+                    html += `<td class="num" style="${s}">${(ret>0?'+':'') + ret.toFixed(1)}</td>`;
+                }
+            }
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    box.innerHTML = html;
+    bindTableEvents();
+}
+
+function bindTableEvents(){
+    const tbody = document.getElementById('periodicTbody'); if(!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+        tr.onclick = function(){
+            let c = activeCurves.find(x => x.name === this.getAttribute('data-name'));
+            if(c){ c.visible = !c.visible; renderActiveTags(); calcAdvanced(); }
+        };
+    });
+    let draggingEle = null;
+    tbody.addEventListener('dragstart', e => { draggingEle = e.target.closest('tr'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); setTimeout(()=> draggingEle.style.opacity = '0.5', 0); });
+    tbody.addEventListener('dragend', e => {
+        draggingEle.style.opacity = '1'; draggingEle = null;
+        let newOrder = [];
+        tbody.querySelectorAll('tr').forEach(tr => { let c = activeCurves.find(x => x.name === tr.getAttribute('data-name')); if(c) newOrder.push(c); });
+        activeCurves = newOrder;
+    });
+    tbody.addEventListener('dragover', e => {
+        e.preventDefault(); const target = e.target.closest('tr');
+        if(target && target !== draggingEle) {
+            const rect = target.getBoundingClientRect(); const next = (e.clientY - rect.top)/(rect.bottom - rect.top) > .5;
+            tbody.insertBefore(draggingEle, next && target.nextSibling || target);
+        }
+    });
+}
+
+// 独立计算单张表格
+function calcTable(ti){
+  const sd=document.getElementById(`sd_${ti}`).value, ed=document.getElementById(`ed_${ti}`).value;
+  if(!G) return;
+  const t = TABLES[ti];
+  const allVals=[],grid=[];
+  t.rows.forEach(r=>{
+    if(r==='sep'){grid.push(null);return;}
+    const rv=[];t.cols.forEach(c=>{const v=calcRet(lookup(r[1],r[2],c),sd,ed);rv.push(v);allVals.push(v);});
+    grid.push({disp:r[0],vals:rv});
+  });
+  const cfn=colorScale(allVals);
+  const tbl=document.getElementById('tbl'+ti);
+  let h='<thead><tr><th>'+t.title+'</th>';
+  t.cols.forEach(c=>{h+='<th>'+c+'</th>';});
+  h+='</tr></thead><tbody>';
+  grid.forEach(row=>{
+    if(row===null){h+='<tr class="sep"><td colspan="'+(t.cols.length+1)+'"></td></tr>';return;}
+    h+='<tr><td>'+row.disp+'</td>';row.vals.forEach(v=>{h+=fmtCell(v,cfn);});h+='</tr>';
+  });
+  tbl.innerHTML=h+'</tbody>';
+}
+</script>
+</body>
+</html>
